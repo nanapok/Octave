@@ -31,19 +31,17 @@ class BotListener(private val bot: Bot) : ListenerAdapter() {
                         "Please check the links below to get help, and use `_help` to get started!")
                 .addField("Important Links",
                         "[Support Server](https://discord.gg/musicbot)\n" +
-                                "[Website](https://octave.gg) \n" +
+                                "[Website](https://octave.gg)\n" +
                                 "[Invite Link](https://invite.octave.gg)\n" +
                                 "[Patreon](https://patreon.com/octave)", true)
                 .setFooter("Thanks for using Octave!")
 
 
         //Find the first channel we can talk to.
-        val channel = event.guild.channels.stream()
-                .filter { guildChannel: GuildChannel -> guildChannel.type == ChannelType.TEXT && (guildChannel as TextChannel).canTalk() }
-                .findFirst()
-                .get() as TextChannel
+        val channel = event.guild.textChannels.firstOrNull(TextChannel::canTalk)
+            ?: return
 
-        channel.sendMessage(embedBuilder.build()).queue { m: Message -> m.delete().queueAfter(1, TimeUnit.MINUTES) }
+        channel.sendMessage(embedBuilder.build()).queue { it.delete().queueAfter(1, TimeUnit.MINUTES) }
 
         bot.datadog.gauge("octave_bot.guilds", bot.shardManager.guildCache.size())
         bot.datadog.gauge("octave_bot.users", bot.shardManager.userCache.size())
@@ -53,19 +51,11 @@ class BotListener(private val bot: Bot) : ListenerAdapter() {
 
     override fun onGuildMessageReceived(event: GuildMessageReceivedEvent) {
         if (event.author.isBot) {
-            if (event.author === event.jda.selfUser) {
-                if (bot.options.ofGuild(event.guild).command.isAutoDelete) {
-                    event.message.delete().queueAfter(10, TimeUnit.SECONDS)
-                }
+            if (event.author == event.jda.selfUser && bot.options.ofGuild(event.guild).command.isAutoDelete) {
+                event.message.delete().queueAfter(10, TimeUnit.SECONDS)
             }
             return
         }
-
-        if ((event.message.contentRaw.startsWith('_') && event.message.contentRaw.endsWith('_')) || (event.message.contentRaw.startsWith(Bot.getInstance().configuration.prefix) && (event.message.contentRaw.endsWith(Bot.getInstance().configuration.prefix)))) {
-            return
-        } //Prevent markdown responses
-
-        bot.commandDispatcher?.handle(Context(bot, event))
     }
 
     override fun onGuildMemberJoin(event: GuildMemberJoinEvent) {

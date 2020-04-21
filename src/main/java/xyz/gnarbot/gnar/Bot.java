@@ -5,6 +5,9 @@ import com.sedmelluq.discord.lavaplayer.jdaudp.NativeAudioSendFactory;
 import com.timgroup.statsd.NonBlockingStatsDClient;
 import com.timgroup.statsd.StatsDClient;
 import io.sentry.Sentry;
+import javaslang.collection.Array;
+import me.devoxin.flight.api.CommandClient;
+import me.devoxin.flight.api.CommandClientBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDAInfo;
 import net.dv8tion.jda.api.entities.Activity;
@@ -32,9 +35,11 @@ import xyz.gnarbot.gnar.utils.SoundManager;
 
 import javax.security.auth.login.LoginException;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 public class Bot {
     private static final Logger LOG = LoggerFactory.getLogger("Bot");
@@ -89,6 +94,19 @@ public class Bot {
         reloadConfiguration();
 
         eventWaiter = new EventWaiter();
+
+        long[] admins = configuration.getAdmins().stream().mapToLong(Long::valueOf).toArray();
+
+        CommandClient commandClient = new CommandClientBuilder()
+                .setPrefixes(configuration.getPrefix())
+                .registerDefaultParsers()
+                .setOwnerIds(admins)
+                .configureDefaultHelpCommand(configuration -> {
+                    configuration.setShowParameterTypes(true);
+                    return null;
+                })
+                .build();
+
         shardManager = DefaultShardManagerBuilder.createDefault(credentials.getToken())
                 .setSessionController(new BucketedController(configuration.getBucketFactor(), 215616923168276480L))
                 .enableIntents(GatewayIntent.GUILD_MEMBERS)
@@ -96,7 +114,7 @@ public class Bot {
                 .setShardsTotal(credentials.getTotalShards())
                 .setShards(credentials.getShardStart(), credentials.getShardEnd() - 1)
                 .setAudioSendFactory(new NativeAudioSendFactory(800))
-                .addEventListeners(eventWaiter, new BotListener(this), new VoiceListener(this), new PatreonListener(this))
+                .addEventListeners(commandClient, eventWaiter, new BotListener(this), new VoiceListener(this))
                 .setActivityProvider(i -> Activity.playing(String.format(configuration.getGame(), i)))
                 .setBulkDeleteSplittingEnabled(false)
                 .build();
